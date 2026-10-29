@@ -1,3 +1,4 @@
+import { passwordRules, passwordError } from '/password-policy.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const initials=n=>n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -53,18 +54,70 @@ function modal(title,lead,body,onSave,{required=false,saveLabel='Salvar'}={}){
   $('#modalRoot').innerHTML=`<div class="modal-bg"><form class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-head"><p class="eyebrow v">Brevia · Protótipos</p><h2 class="h1" id="modalTitle">${esc(title)}</h2><p class="lead">${esc(lead)}</p></div><div class="modal-body">${body}<p class="login-err" id="modalError" role="alert"></p></div><div class="modal-foot">${required?'':'<button type="button" class="btn btn-ghost" data-cancel>Cancelar</button>'}<button class="btn btn-primary" type="submit">${esc(saveLabel)}</button></div></form></div>`;
   document.body.style.overflow='hidden';const form=$('#modalRoot form');
   $('#modalRoot [data-cancel]')?.addEventListener('click',()=>closeModal());
-  form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector('[type=submit]');b.disabled=true;$('#modalError').textContent='';try{await onSave(form);closeModal(true);if(me&&!me.mustChange)await refresh();}catch(err){if($('#modalError'))$('#modalError').textContent=err.message;else notify(err.message);}finally{b.disabled=false;}};
+  form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector('[type=submit]');b.disabled=true;form.dataset.saving='true';$('#modalError').textContent='';try{await onSave(form);closeModal(true);if(me&&!me.mustChange)await refresh();}catch(err){if($('#modalError'))$('#modalError').textContent=err.message;else notify(err.message);}finally{b.disabled=false;form.dataset.saving='false';if(form.isConnected)form.dispatchEvent(new Event('input'));}};
   form.querySelector('input,button')?.focus();
 }
 const field=(id,label,value='',type='text',extra='')=>`<div class="field"><label for="${id}">${label}</label><input class="input" id="${id}" name="${id}" type="${type}" value="${esc(value)}" ${extra}></div>`;
+function passwordFields(id, confirmationId, label, optional=false) {
+  return field(id,label,'','password',`${optional?'':'required'} minlength="12" maxlength="72" autocomplete="new-password" aria-describedby="passwordRequirements passwordLimit"`)
+    + `<div class="password-checks" id="passwordRequirements" data-password-checks><p>Sua senha precisa ter:</p><div role="list">${passwordRules.map(rule=>`<div class="password-rule" role="listitem" data-rule="${rule.id}"><span class="rule-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="m4 8 3 3 5-6"/></svg></span><span>${esc(rule.label)}</span><span class="sr-only" data-rule-state>Não atendido</span></div>`).join('')}</div><p class="password-feedback error" id="passwordLimit" hidden></p></div>`
+    + field(confirmationId,'Confirme a nova senha','','password',`${optional?'':'required'} maxlength="72" autocomplete="new-password" aria-describedby="passwordMatch"`)
+    + '<p class="password-feedback" id="passwordMatch" role="status" aria-live="polite">Repita a senha para confirmar.</p>';
+}
+function wirePassword(id, confirmationId, {optional=false,currentId}={}) {
+  const input=$('#'+id),confirmation=$('#'+confirmationId),form=input.form,button=form.querySelector('[type=submit]');
+  const update=()=>{
+    const value=input.value,confirm=confirmation.value,empty=!value&&!confirm;
+    for(const rule of passwordRules){const row=form.querySelector(`[data-rule="${rule.id}"]`),valid=rule.test(value);row.classList.toggle('met',valid);row.querySelector('[data-rule-state]').textContent=valid?'Atendido':'Não atendido';}
+    const tooLong=new TextEncoder().encode(value).length>72;
+    $('#passwordLimit').hidden=!tooLong;$('#passwordLimit').textContent=tooLong?'A senha ficou longa demais. Use menos caracteres.':'';
+    const same=!!value&&value===confirm,current=currentId?$('#'+currentId).value:null,reused=!!current&&current===value;
+    const status=$('#passwordMatch');
+    status.className='password-feedback'+(empty?'':same&&!reused?' success':' error');
+    status.textContent=empty?'Repita a senha para confirmar.':reused?'Escolha uma senha diferente da atual.':same?'As senhas coincidem.':confirm?'As senhas não coincidem.':'Confirme a nova senha.';
+    confirmation.setAttribute('aria-invalid',String(!empty&&(!same||reused)));
+    confirmation.classList.toggle('password-invalid',!empty&&(!same||reused));confirmation.classList.toggle('password-valid',same&&!reused);
+    input.setCustomValidity(value?passwordError(value):'');confirmation.setCustomValidity(!empty&&!same?'As senhas não coincidem.':reused?'Escolha uma senha diferente da atual.':'');
+    button.disabled=form.dataset.saving==='true'||!(optional&&empty||!passwordError(value)&&same&&!reused&&(!currentId||!!current));
+  };
+  form.addEventListener('input',update);update();
+}
 const checks=(items,selected)=>`<div class="checks">${items.length?items.map(i=>`<label class="check"><input type="checkbox" name="access" value="${i.id}" ${selected.includes(i.id)?'checked':''}><div><div class="t">${esc(i.title||i.name)}</div><div class="sub">${esc(i.client||i.company)}${i.active===false?' · desativado':''}</div></div></label>`).join(''):'<p class="muted">Nenhum item disponível. Você pode definir os acessos depois.</p>'}</div>`;
 const selected=form=>[...form.querySelectorAll('[name=access]:checked')].map(x=>x.value);
-function userModal(u){modal(u?'Editar cliente':'Criar login',u?'Edite os dados, os acessos e o status do cliente.':'O cliente trocará a senha provisória no primeiro acesso.',field('uName','Nome',u?.name||'','text','required maxlength="200"')+field('uCompany','Empresa',u?.company||'','text','required maxlength="200"')+field('uEmail','E-mail',u?.email||'','email','required maxlength="200" autocomplete="off"')+field('uPassword',u?'Nova senha provisória (opcional)':'Senha provisória','','password',`${u?'':'required'} minlength="12" maxlength="72" autocomplete="new-password"`)+(u?`<label class="check"><input type="checkbox" id="uActive" ${u.active?'checked':''}>Login ativo</label>`:'')+`<div class="field"><label>Protótipos liberados</label>${checks(prototypes,u?.access||[])}</div>`,async form=>{await api('/api/admin/users'+(u?'/'+u.id:''),{method:u?'PATCH':'POST',body:{name:$('#uName').value,company:$('#uCompany').value,email:$('#uEmail').value,password:$('#uPassword').value,active:u?$('#uActive').checked:true,access:selected(form)}});notify(u?'Cliente atualizado.':'Login criado. Envie a senha provisória ao cliente por um canal seguro.');});}
+function userModal(u) {
+  modal(u?'Editar cliente':'Criar login',u?'Edite os dados, os acessos e o status do cliente.':'O cliente trocará a senha provisória no primeiro acesso.',
+    field('uName','Nome',u?.name||'','text','required maxlength="200"')
+    +field('uCompany','Empresa',u?.company||'','text','required maxlength="200"')
+    +field('uEmail','E-mail',u?.email||'','email','required maxlength="200" autocomplete="off"')
+    +passwordFields('uPassword','uConfirmPassword',u?'Nova senha provisória (opcional)':'Senha provisória',!!u)
+    +(u?`<label class="check"><input type="checkbox" id="uActive" ${u.active?'checked':''}>Login ativo</label>`:'')
+    +`<div class="field"><label>Protótipos liberados</label>${checks(prototypes,u?.access||[])}</div>`,
+    async form=>{
+      const value=$('#uPassword').value;
+      if(value&&passwordError(value))throw new Error(passwordError(value));
+      if(value!==$('#uConfirmPassword').value)throw new Error('As senhas não coincidem.');
+      await api('/api/admin/users'+(u?'/'+u.id:''),{method:u?'PATCH':'POST',body:{name:$('#uName').value,company:$('#uCompany').value,email:$('#uEmail').value,password:value,active:u?$('#uActive').checked:true,access:selected(form)}});
+      notify(u?'Cliente atualizado.':'Login criado. Envie a senha provisória ao cliente por um canal seguro.');
+    });
+  wirePassword('uPassword','uConfirmPassword',{optional:!!u});
+}
 function fileField(){return '<div class="field"><label for="htmlFile">Arquivo HTML</label><div class="drop" id="fileDrop"><b>Escolha um arquivo .html ou arraste aqui</b><p class="muted">Até 10 MB · HTML com estilos e scripts incorporados</p><input id="htmlFile" type="file" accept=".html,.htm" required aria-label="Arquivo HTML"></div></div>';}
 function wireDrop(){const drop=$('#fileDrop');if(!drop)return;drop.ondragover=e=>e.preventDefault();drop.ondrop=e=>{e.preventDefault();if(e.dataTransfer.files.length){$('#htmlFile').files=e.dataTransfer.files;}};}
 function protoModal(p){const clients=users.filter(u=>u.role==='client');modal(p?'Editar protótipo e acessos':'Publicar protótipo',p?'Defina os dados e quem pode abrir este protótipo.':'Publique o HTML e escolha quem pode ver.',field('pTitle','Nome do protótipo',p?.title||'','text','required maxlength="200"')+field('pClient','Cliente',p?.client||'','text','required maxlength="200"')+`<div class="field"><label for="pDescription">Descrição</label><textarea class="input" id="pDescription" required maxlength="2000" rows="3">${esc(p?.description||'')}</textarea></div>`+(p?'':fileField())+`<div class="field"><label>Liberar para</label>${checks(clients,clients.filter(u=>p&&u.access.includes(p.id)).map(u=>u.id))}</div>`,async form=>{const body={title:$('#pTitle').value,client:$('#pClient').value,description:$('#pDescription').value,access:selected(form)};let payload=body;if(!p){payload=new FormData();for(const [key,value] of Object.entries(body))payload.append(key,key==='access'?JSON.stringify(value):value);payload.append('html',$('#htmlFile').files[0]);}await api('/api/admin/prototypes'+(p?'/'+p.id:''),{method:p?'PATCH':'POST',body:payload});notify(p?'Protótipo e acessos atualizados.':'Protótipo publicado.');});wireDrop();}
 function versionModal(p){modal('Publicar nova versão',`${p.title} passará de v${p.version} para v${p.version+1}. Os acessos serão mantidos.`,fileField(),async()=>{const body=new FormData();body.append('html',$('#htmlFile').files[0]);await api(`/api/admin/prototypes/${p.id}/html`,{method:'PUT',body});notify('Nova versão publicada.');},{saveLabel:'Publicar versão'});wireDrop();}
 function deleteModal(p){modal('Remover protótipo',`O HTML de “${p.title}” e seus acessos serão removidos. Esta ação não pode ser desfeita.`,field('confirmation','Digite REMOVER para confirmar','','text','required pattern="REMOVER" autocomplete="off"'),async()=>{await api(`/api/admin/prototypes/${p.id}`,{method:'DELETE'});notify('Protótipo removido.');},{saveLabel:'Remover protótipo'});}
-function changePassword(required){modal(required?'Defina sua senha':'Trocar senha',required?'Para continuar, substitua a senha provisória por uma senha pessoal.':'Use pelo menos 12 caracteres.',field('currentPassword','Senha atual','','password','required autocomplete="current-password"')+field('newPassword','Nova senha','','password','required minlength="12" maxlength="72" autocomplete="new-password"')+field('confirmPassword','Confirme a nova senha','','password','required minlength="12" maxlength="72" autocomplete="new-password"'),async()=>{if($('#newPassword').value!==$('#confirmPassword').value)throw new Error('A confirmação da senha não confere.');await api('/api/password',{method:'POST',body:{currentPassword:$('#currentPassword').value,password:$('#newPassword').value}});me.mustChange=false;notify('Senha atualizada.');},{required,saveLabel:'Salvar senha'});}
+function changePassword(required) {
+  modal(required?'Defina sua senha':'Trocar senha',required?'Para continuar, substitua a senha provisória por uma senha pessoal.':'Crie uma senha pessoal seguindo os requisitos abaixo.',
+    field('currentPassword','Senha atual','','password','required autocomplete="current-password"')
+    +passwordFields('newPassword','confirmPassword','Nova senha'),
+    async()=>{
+      const value=$('#newPassword').value;
+      if(passwordError(value))throw new Error(passwordError(value));
+      if(value!==$('#confirmPassword').value)throw new Error('As senhas não coincidem.');
+      await api('/api/password',{method:'POST',body:{currentPassword:$('#currentPassword').value,password:value}});
+      me.mustChange=false;notify('Senha atualizada.');
+    },{required,saveLabel:'Salvar senha'});
+  wirePassword('newPassword','confirmPassword',{currentId:'currentPassword'});
+}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#modalRoot').children.length)closeModal();else if(!$('#viewer').classList.contains('hidden'))closeViewer();}if(e.key==='Tab'&&$('#modalRoot').children.length){const nodes=[...$('#modalRoot').querySelectorAll('input,textarea,button')].filter(n=>!n.disabled),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
 api('/api/me').then(enter).catch(e=>{if(me)notify(e.message);});

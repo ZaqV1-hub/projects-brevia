@@ -3,12 +3,13 @@ import bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { passwordError } from '../public/password-policy.js';
 const db=openDatabase(process.env.DATA_DIR||resolve('data'));
 try {
   const email=(process.env.ADMIN_EMAIL||'zaq@brevia.local').trim().toLowerCase();
   if(!db.prepare("SELECT id FROM users WHERE role='admin'").get()){
-    const password=process.env.ADMIN_PASSWORD||randomBytes(18).toString('base64url');
-    if(password.length<12||Buffer.byteLength(password)>72)throw new Error('ADMIN_PASSWORD deve ter pelo menos 12 caracteres e no máximo 72 bytes.');
+    const password=process.env.ADMIN_PASSWORD||'Bv9!'+randomBytes(18).toString('base64url');
+    if(passwordError(password))throw new Error(passwordError(password));
     db.prepare("INSERT INTO users(id,name,company,email,password,role,must_change) VALUES(?,?,?,?,?,'admin',1)").run(randomUUID(),'Zaq','Brevia',email,await bcrypt.hash(password,12));
     console.log(`Administrador criado: ${email}`);
     if(!process.env.ADMIN_PASSWORD)console.log(`Senha provisória: ${password}`);

@@ -14,7 +14,7 @@ npm start
 
 Abra http://localhost:3000. A configuração inicial cria `zaq@brevia.local` e imprime uma senha aleatória uma única vez. A troca é obrigatória no primeiro acesso. Não há senha padrão no código. Executar o setup novamente preserva o administrador existente.
 
-É possível escolher o e-mail e a senha inicial pelas variáveis `ADMIN_EMAIL` e `ADMIN_PASSWORD` antes do setup. A senha deve ter pelo menos 12 caracteres e até 72 bytes. Não coloque credenciais em arquivos versionados. `.env.example` documenta as opções; para carregar um arquivo `.env` local, use `node --env-file=.env server.js` e `node --env-file=.env scripts/setup.js`.
+É possível escolher o e-mail e a senha inicial pelas variáveis `ADMIN_EMAIL` e `ADMIN_PASSWORD` antes do setup. A senha deve ter pelo menos 12 caracteres, com letra maiúscula, minúscula, número e símbolo, respeitando o limite de 72 bytes do bcrypt. Os formulários mostram os requisitos em tempo real, confirmam se as senhas coincidem e só liberam o botão quando estiverem válidas. O servidor aplica a mesma política. Não coloque credenciais em arquivos versionados. `.env.example` documenta as opções; para carregar um arquivo `.env` local, use `node --env-file=.env server.js` e `node --env-file=.env scripts/setup.js`.
 
 Para importar o HTML Estância na primeira configuração:
 

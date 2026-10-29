@@ -7,13 +7,14 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase, transaction } from './db.js';
+import { passwordError } from './public/password-policy.js';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const safeUser=u=>({id:u.id,name:u.name,company:u.company,email:u.email,role:u.role,active:!!u.active,mustChange:!!u.must_change});
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max=200)=>{if(typeof v!=='string'||!v.trim()||v.trim().length>max) throw fail(400,'Preencha os campos corretamente.'); return v.trim();};
-const password=v=>{if(typeof v!=='string'||v.length<12||Buffer.byteLength(v)>72)throw fail(400,'A senha deve ter pelo menos 12 caracteres e no máximo 72 bytes.');return v;};
+const password=v=>{const error=passwordError(v);if(error)throw fail(400,error);return v;};
 export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),production=process.env.NODE_ENV==='production',origin=process.env.APP_ORIGIN||'http://localhost:3000'}={}) {
   if(production&&!origin.startsWith('https://'))throw new Error('APP_ORIGIN deve usar HTTPS em produção.');
   const db=openDatabase(dataDir), app=express();
@@ -112,6 +113,9 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
   app.get('/',(req,res)=>res.sendFile(resolve(root,'public/index.html')));
   app.get('/app.js',(req,res)=>res.sendFile(resolve(root,'public/app.js')));
   app.get('/styles.css',(req,res)=>res.sendFile(resolve(root,'public/styles.css')));
+  app.get('/password-policy.js',(req,res)=>res.sendFile(resolve(root,'public/password-policy.js')));
+  app.get('/assets/brevia-logo-white.png',(req,res)=>res.sendFile(resolve(root,'public/assets/brevia-logo-white.png')));
+  app.get('/assets/brevia-logo.png',(req,res)=>res.sendFile(resolve(root,'public/assets/brevia-logo.png')));
   app.use((req,res,next)=>next(fail(404,'Página não encontrada.')));
   app.use((err,req,res,next)=>{
     let status=err.status||500,message=err.message;
