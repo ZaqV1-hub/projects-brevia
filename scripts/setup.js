@@ -1,4 +1,4 @@
-import { openDatabase } from '../db.js';
+import { openDatabase, transaction, clientKey } from '../db.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -19,7 +19,12 @@ try {
   if(file&&!db.prepare('SELECT id FROM prototypes LIMIT 1').get()){
     const html=readFileSync(resolve(file));
     if(html.length>10*1024*1024)throw new Error('HTML maior que 10 MB.');
-    db.prepare('INSERT INTO prototypes VALUES(?,?,?,?,1,?,?)').run(randomUUID(),'Estância: aplicativo dos representantes','Estância','Protótipo navegável do aplicativo dos representantes da Estância.',new Date().toISOString(),html);
+    transaction(db,()=>{
+      const prototypeId=randomUUID(),clientId=db.prepare('SELECT id FROM clients WHERE name_key=?').get(clientKey('Estância'))?.id||randomUUID();
+      db.prepare('INSERT OR IGNORE INTO clients VALUES(?,?,?)').run(clientId,'Estância',clientKey('Estância'));
+      db.prepare('INSERT INTO prototypes VALUES(?,?,?,?,1,?,?)').run(prototypeId,'Estância: aplicativo dos representantes','','Protótipo navegável do aplicativo dos representantes da Estância.',new Date().toISOString(),html);
+      db.prepare('INSERT INTO prototype_clients VALUES(?,?)').run(prototypeId,clientId);
+    });
     console.log('Protótipo Estância importado. Apenas o administrador pode vê-lo até liberar os acessos.');
   }
 } finally {db.close();}

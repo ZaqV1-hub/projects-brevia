@@ -1,0 +1,26 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {DatabaseSync} from 'node:sqlite';
+import {openDatabase} from '../db.js';
+test('migração preserva HTML, pessoas e permissões anteriores e consolida nomes sem acento',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'brevia-migration-'));
+  const old=new DatabaseSync(join(dir,'portal.sqlite'));
+  old.exec(`CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,company TEXT,email TEXT,password TEXT,role TEXT,active INTEGER,must_change INTEGER);
+    CREATE TABLE prototypes(id TEXT PRIMARY KEY,title TEXT,client TEXT,description TEXT,version INTEGER,updated TEXT,html BLOB);
+    CREATE TABLE access(user_id TEXT,prototype_id TEXT,PRIMARY KEY(user_id,prototype_id));
+    INSERT INTO users VALUES('u','Pessoa','ESTANCIA','pessoa@example.com','hash','client',1,0);
+    INSERT INTO users VALUES('r','Pessoa Rincão','Rincão','r@example.com','hash','client',1,0);
+    INSERT INTO prototypes VALUES('p','App','Estância','Texto',3,'2026-10-29','<html>original</html>');
+    INSERT INTO access VALUES('u','p');INSERT INTO access VALUES('r','p');`);
+  old.close();let db=openDatabase(dir);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM clients').get().n,2);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM prototype_clients').get().n,2);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM user_clients').get().n,2);
+  assert.equal(db.prepare('SELECT version FROM prototypes').get().version,3);
+  assert.equal(db.prepare('SELECT password FROM users WHERE id=?').get('u').password,'hash');
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,1);
+  db.close();db=openDatabase(dir);assert.equal(db.prepare('SELECT COUNT(*) AS n FROM clients').get().n,2);db.close();rmSync(dir,{recursive:true,force:true});
+});

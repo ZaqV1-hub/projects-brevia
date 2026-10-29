@@ -26,15 +26,21 @@ A importação acontece somente se não existir nenhum protótipo. Ele fica disp
 
 ## Uso
 
-Em Administração, publique um HTML com nome, cliente, descrição e pessoas autorizadas. Em Pessoas, crie os logins dos clientes com senhas provisórias. A pessoa deverá criar sua própria senha no primeiro acesso. A administração permite editar nome, empresa, e-mail, protótipos liberados, redefinir senha e desativar o login. Desativar ou redefinir senha invalida as sessões daquele usuário imediatamente.
+O painel tem as abas Protótipos, Clientes e Pessoas. Em Clientes, cadastre as empresas uma única vez e edite seus nomes quando necessário. O cadastro impede duplicação por diferenças de acento, maiúsculas ou espaços. Nos formulários de protótipos e pessoas, selecione uma ou mais empresas cadastradas; não há campo de empresa em texto livre.
 
-Em “Editar / acessos”, ajuste os dados do protótipo e as pessoas autorizadas. “Nova versão” substitui o HTML, incrementa v1, v2 etc. e preserva as permissões. O contador não é um histórico recuperável: o HTML anterior é substituído. A remoção exige digitar REMOVER e apaga o HTML e as permissões.
+Uma pessoa recebe automaticamente acesso a todos os protótipos dos clientes aos quais está vinculada. Um protótipo pode ser atribuído a Estância e Rincão, por exemplo, e uma empresa pode ter vários protótipos. Em “Editar / clientes”, ajuste essas empresas. Alterações nos vínculos são verificadas a cada nova entrega do HTML. Os nomes de outras empresas vinculadas a um protótipo compartilhado ficam visíveis somente ao administrador e às pessoas vinculadas àquelas empresas.
+
+Em Pessoas, crie os logins com senhas provisórias e selecione seus clientes. A troca de senha é obrigatória no primeiro acesso. Também é possível editar nome, e-mail, clientes, redefinir senha e desativar o login. Desativar ou redefinir senha invalida as sessões daquela pessoa imediatamente. E-mail ou senha incorretos geram mensagem e bordas vermelhas no login.
+
+“Nova versão” substitui o HTML, incrementa v1, v2 etc. e preserva os clientes selecionados. O contador não é um histórico recuperável: o HTML anterior é substituído. A remoção exige digitar REMOVER e apaga o HTML e seus vínculos.
+
+Na atualização de um banco anterior, a migração cria os clientes a partir dos nomes existentes e converte os acessos individuais para o modelo por empresa. Pessoas da mesma empresa passam a compartilhar os protótipos dessa empresa. Versões, HTMLs, senhas e sessões são preservados. Faça um backup antes de atualizar.
 
 Clientes só recebem os metadados dos protótipos liberados para eles. Os cards têm miniaturas isoladas e a busca aceita palavras com ou sem acento. O visualizador oferece desktop, tablet, celular, recarregar e tela cheia. No celular, as tabelas administrativas podem ser deslizadas horizontalmente.
 
 ## Segurança e limites
 
-Os HTMLs ficam como BLOBs no banco privado `data/portal.sqlite`, fora dos arquivos servidos. O servidor expõe somente três arquivos do portal por caminhos explícitos. Não existe rota de download. Cada entrega de HTML exige sessão ativa, senha definitiva e autorização consultada no banco; copiar o link não concede acesso.
+Os HTMLs ficam como BLOBs no banco privado `data/portal.sqlite`, fora dos arquivos servidos. O servidor expõe somente os arquivos da interface e as logos por caminhos explícitos. Não existe rota de download. Cada entrega de HTML exige sessão ativa, senha definitiva e uma empresa em comum entre a pessoa e o protótipo, consultada no banco; copiar o link não concede acesso.
 
 Senhas usam bcrypt com custo 12. A sessão de oito horas usa um token aleatório; o banco guarda apenas seu SHA-256. O cookie é HttpOnly, SameSite=Strict e Secure em produção. Mutações exigem origem exata e token CSRF, com exceção do login, que exige origem exata. Há limitação de tentativas de login e de solicitações da API. Consultas usam parâmetros, os uploads são limitados a 10 MB e os dados apresentados no portal são escapados.
 

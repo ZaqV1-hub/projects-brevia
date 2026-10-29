@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDatabase, transaction } from './db.js';
+import { openDatabase, transaction, clientKey } from './db.js';
 import { passwordError } from './public/password-policy.js';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,10 @@ const password=v=>{const error=passwordError(v);if(error)throw fail(400,error);r
 export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),production=process.env.NODE_ENV==='production',origin=process.env.APP_ORIGIN||'http://localhost:3000'}={}) {
   if(production&&!origin.startsWith('https://'))throw new Error('APP_ORIGIN deve usar HTTPS em produção.');
   const db=openDatabase(dataDir), app=express();
+  const clientsFor=(table,column,id)=>db.prepare(`SELECT c.id,c.name FROM clients c JOIN ${table} link ON link.client_id=c.id WHERE link.${column}=? ORDER BY c.name`).all(id);
+  const serializeUser=u=>{const clients=clientsFor('user_clients','user_id',u.id);return {...safeUser(u),clients,company:u.role==='admin'?'Brevia':clients.map(c=>c.name).join(' · ')};};
+  const serializePrototype=(p,u)=>{const clients=u.role==='admin'?clientsFor('prototype_clients','prototype_id',p.id):db.prepare('SELECT c.id,c.name FROM clients c JOIN prototype_clients pc ON pc.client_id=c.id JOIN user_clients uc ON uc.client_id=c.id WHERE pc.prototype_id=? AND uc.user_id=? ORDER BY c.name').all(p.id,u.id);return {...p,clients,client:clients.map(c=>c.name).join(' · ')};};
+  const setClients=(table,column,id,ids)=>{db.prepare(`DELETE FROM ${table} WHERE ${column}=?`).run(id);for(const client of ids)db.prepare(`INSERT INTO ${table}(${column},client_id) VALUES(?,?)`).run(id,client);};
   app.disable('x-powered-by'); app.disable('etag');
   if(production)app.set('trust proxy',1);
   app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com'],fontSrc:["'self'",'https://fonts.gstatic.com'],imgSrc:["'self'",'data:'],frameSrc:["'self'"],objectSrc:["'none'"],baseUri:["'none'"],formAction:["'self'"],frameAncestors:["'none'"],upgradeInsecureRequests:production?[]:null}},strictTransportSecurity:production?undefined:false}));
@@ -40,7 +44,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
   const auth=(req,res,next)=>req.user?next():next(fail(401,'Entre para continuar.'));
   const ready=(req,res,next)=>req.user.must_change?next(fail(403,'Troque sua senha provisória para continuar.')):next();
   const admin=(req,res,next)=>req.user.role==='admin'?next():next(fail(403,'Acesso restrito à administração.'));
-  const canAccess=(u,id)=>u.role==='admin'||!!db.prepare('SELECT 1 FROM access WHERE user_id=? AND prototype_id=?').get(u.id,id);
+  const canAccess=(u,id)=>u.role==='admin'||!!db.prepare('SELECT 1 FROM prototype_clients pc JOIN user_clients uc ON uc.client_id=pc.client_id WHERE uc.user_id=? AND pc.prototype_id=?').get(u.id,id);
   const accessIds=(v,table)=>{if(!Array.isArray(v)||v.length>1000||v.some(id=>typeof id!=='string'||!db.prepare(`SELECT id FROM ${table} WHERE id=?`).get(id)))throw fail(400,'Acessos inválidos.');return [...new Set(v)];};
   const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:1,fields:10},fileFilter:(req,file,cb)=>cb(null,/\.html?$/i.test(file.originalname))}).single('html');
   const htmlFile=req=>{if(!req.file)throw fail(400,'Selecione um arquivo .html de até 10 MB.');const html=req.file.buffer.toString('utf8');if(!/<(?:html|body|!doctype)\b/i.test(html)||html.includes('\u0000'))throw fail(400,'O arquivo não contém um documento HTML válido.');return req.file.buffer;};
@@ -57,9 +61,9 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
     const token=randomBytes(32).toString('hex'),csrf=randomBytes(32).toString('hex');
     db.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(hash(token),u.id,csrf,Date.now()+8*3600000);
     res.cookie('brevia_session',token,{httpOnly:true,secure:production,sameSite:'strict',path:'/',maxAge:8*3600000});
-    res.json({user:safeUser(u),csrf});
+    res.json({user:serializeUser(u),csrf});
   });
-  app.get('/api/me',auth,(req,res)=>res.json({user:safeUser(req.user),csrf:req.session.csrf}));
+  app.get('/api/me',auth,(req,res)=>res.json({user:serializeUser(req.user),csrf:req.session.csrf}));
   app.post('/api/logout',auth,(req,res)=>{db.prepare('DELETE FROM sessions WHERE token=?').run(req.session.token);res.clearCookie('brevia_session',{httpOnly:true,secure:production,sameSite:'strict',path:'/'}).json({ok:true});});
   app.post('/api/password',auth,async(req,res)=>{
     const next=password(req.body.password);
@@ -69,7 +73,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
     transaction(db,()=>{db.prepare('UPDATE users SET password=?,must_change=0 WHERE id=?').run(encrypted,req.user.id);db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').run(req.user.id,req.session.token);});
     res.json({ok:true});
   });
-  app.get('/api/prototypes',auth,ready,(req,res)=>res.json(db.prepare(`SELECT id,title,client,description,version,updated FROM prototypes ${req.user.role==='admin'?'':'WHERE id IN (SELECT prototype_id FROM access WHERE user_id=?)'} ORDER BY updated DESC`).all(...(req.user.role==='admin'?[]:[req.user.id]))));
+  app.get('/api/prototypes',auth,ready,(req,res)=>res.json(db.prepare(`SELECT id,title,description,version,updated FROM prototypes ${req.user.role==='admin'?'':'WHERE id IN (SELECT pc.prototype_id FROM prototype_clients pc JOIN user_clients uc ON uc.client_id=pc.client_id WHERE uc.user_id=?)'} ORDER BY updated DESC`).all(...(req.user.role==='admin'?[]:[req.user.id])).map(p=>serializePrototype(p,req.user))));
   app.get('/api/prototypes/:id/content',auth,ready,(req,res)=>{
     if(!canAccess(req.user,req.params.id))throw fail(404,'Protótipo não encontrado ou acesso não autorizado.');
     const p=db.prepare('SELECT html FROM prototypes WHERE id=?').get(req.params.id);if(!p)throw fail(404,'Protótipo não encontrado.');
@@ -78,36 +82,42 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
     res.set({'Content-Security-Policy':`sandbox allow-scripts allow-forms; default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https:; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; media-src https: data: blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,'X-Frame-Options':'SAMEORIGIN','Cross-Origin-Resource-Policy':'same-origin'}).type('html').send(Buffer.from(p.html));
   });
   app.use('/api/admin',auth,ready,admin);
-  app.get('/api/admin/users',(req,res)=>res.json(db.prepare('SELECT * FROM users ORDER BY name').all().map(u=>({...safeUser(u),access:db.prepare('SELECT prototype_id FROM access WHERE user_id=?').all(u.id).map(a=>a.prototype_id)}))));
+  app.get('/api/admin/clients',(req,res)=>res.json(db.prepare('SELECT id,name FROM clients ORDER BY name').all().map(c=>({...c,people:db.prepare('SELECT COUNT(*) AS n FROM user_clients WHERE client_id=?').get(c.id).n,prototypes:db.prepare('SELECT COUNT(*) AS n FROM prototype_clients WHERE client_id=?').get(c.id).n}))));
+  app.post('/api/admin/clients',(req,res)=>{const name=text(req.body.name),id=randomUUID();if(db.prepare('SELECT id FROM clients WHERE name_key=?').get(clientKey(name)))throw fail(409,'Este cliente já está cadastrado, mesmo com diferenças de acento ou maiúsculas.');db.prepare('INSERT INTO clients VALUES(?,?,?)').run(id,name,clientKey(name));res.status(201).json({id});});
+  app.patch('/api/admin/clients/:id',(req,res)=>{const name=text(req.body.name),existing=db.prepare('SELECT id FROM clients WHERE name_key=? AND id!=?').get(clientKey(name),req.params.id);if(existing)throw fail(409,'Este cliente já está cadastrado, mesmo com diferenças de acento ou maiúsculas.');if(!db.prepare('UPDATE clients SET name=?,name_key=? WHERE id=?').run(name,clientKey(name),req.params.id).changes)throw fail(404,'Cliente não encontrado.');res.json({ok:true});});
+  app.get('/api/admin/users',(req,res)=>res.json(db.prepare('SELECT * FROM users ORDER BY name').all().map(serializeUser)));
   app.post('/api/admin/users',async(req,res)=>{
-    const name=text(req.body.name),company=text(req.body.company),email=text(req.body.email).toLowerCase();
+    const name=text(req.body.name),email=text(req.body.email).toLowerCase();
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw fail(400,'Informe um e-mail válido.');
-    const encrypted=await bcrypt.hash(password(req.body.password),12),ids=accessIds(req.body.access||[],'prototypes'),id=randomUUID();
-    transaction(db,()=>{db.prepare("INSERT INTO users(id,name,company,email,password,role) VALUES(?,?,?,?,?,'client')").run(id,name,company,email,encrypted);for(const p of ids)db.prepare('INSERT INTO access VALUES(?,?)').run(id,p);});res.status(201).json({id});
+    const ids=accessIds(req.body.clients,'clients');if(!ids.length)throw fail(400,'Selecione pelo menos um cliente para esta pessoa.');
+    const encrypted=await bcrypt.hash(password(req.body.password),12),id=randomUUID();
+    transaction(db,()=>{db.prepare("INSERT INTO users(id,name,company,email,password,role) VALUES(?,?,'',?,?,'client')").run(id,name,email,encrypted);setClients('user_clients','user_id',id,ids);});res.status(201).json({id});
   });
   app.patch('/api/admin/users/:id',async(req,res)=>{
     const u=db.prepare("SELECT * FROM users WHERE id=? AND role='client'").get(req.params.id);if(!u)throw fail(404,'Cliente não encontrado.');
-    const name=text(req.body.name),company=text(req.body.company),email=text(req.body.email).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw fail(400,'Informe um e-mail válido.');
-    const ids=accessIds(req.body.access||[],'prototypes');if(typeof req.body.active!=='boolean')throw fail(400,'Status inválido.');
+    const name=text(req.body.name),email=text(req.body.email).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw fail(400,'Informe um e-mail válido.');
+    const ids=accessIds(req.body.clients,'clients');if(!ids.length)throw fail(400,'Selecione pelo menos um cliente para esta pessoa.');if(typeof req.body.active!=='boolean')throw fail(400,'Status inválido.');
     const encrypted=req.body.password?await bcrypt.hash(password(req.body.password),12):null;
     transaction(db,()=>{
-      db.prepare('UPDATE users SET name=?,company=?,email=?,active=?,password=?,must_change=? WHERE id=?').run(name,company,email,+req.body.active,encrypted||u.password,encrypted?1:u.must_change,u.id);
-      db.prepare('DELETE FROM access WHERE user_id=?').run(u.id);for(const p of ids)db.prepare('INSERT INTO access VALUES(?,?)').run(u.id,p);
+      db.prepare('UPDATE users SET name=?,email=?,active=?,password=?,must_change=? WHERE id=?').run(name,email,+req.body.active,encrypted||u.password,encrypted?1:u.must_change,u.id);
+      setClients('user_clients','user_id',u.id,ids);
       if(!req.body.active||encrypted)db.prepare('DELETE FROM sessions WHERE user_id=?').run(u.id);
     });res.json({ok:true});
   });
   app.post('/api/admin/prototypes',upload,(req,res)=>{
-    const html=htmlFile(req),title=text(req.body.title),client=text(req.body.client),description=text(req.body.description,2000),id=randomUUID();
-    let ids;try{ids=accessIds(JSON.parse(req.body.access||'[]'),'users');}catch{throw fail(400,'Acessos inválidos.');}
-    transaction(db,()=>{db.prepare('INSERT INTO prototypes VALUES(?,?,?,?,1,?,?)').run(id,title,client,description,new Date().toISOString(),html);for(const u of ids)db.prepare('INSERT INTO access VALUES(?,?)').run(u,id);});res.status(201).json({id});
+    const html=htmlFile(req),title=text(req.body.title),description=text(req.body.description,2000),id=randomUUID();
+    let ids;try{ids=accessIds(JSON.parse(req.body.clients),'clients');}catch{throw fail(400,'Selecione clientes cadastrados.');}
+    if(!ids.length)throw fail(400,'Selecione pelo menos um cliente para este protótipo.');
+    transaction(db,()=>{db.prepare('INSERT INTO prototypes VALUES(?,?,?, ?,1,?,?)').run(id,title,'',description,new Date().toISOString(),html);setClients('prototype_clients','prototype_id',id,ids);});res.status(201).json({id});
   });
   app.put('/api/admin/prototypes/:id/html',upload,(req,res)=>{
     const result=db.prepare('UPDATE prototypes SET html=?,version=version+1,updated=? WHERE id=?').run(htmlFile(req),new Date().toISOString(),req.params.id);
     if(!result.changes)throw fail(404,'Protótipo não encontrado.');res.json({ok:true});
   });
   app.patch('/api/admin/prototypes/:id',(req,res)=>{
-    const ids=accessIds(req.body.access,'users'),title=text(req.body.title),client=text(req.body.client),description=text(req.body.description,2000);
-    transaction(db,()=>{if(!db.prepare('UPDATE prototypes SET title=?,client=?,description=? WHERE id=?').run(title,client,description,req.params.id).changes)throw fail(404,'Protótipo não encontrado.');db.prepare('DELETE FROM access WHERE prototype_id=?').run(req.params.id);for(const u of ids)db.prepare('INSERT INTO access VALUES(?,?)').run(u,req.params.id);});res.json({ok:true});
+    const ids=accessIds(req.body.clients,'clients'),title=text(req.body.title),description=text(req.body.description,2000);
+    if(!ids.length)throw fail(400,'Selecione pelo menos um cliente para este protótipo.');
+    transaction(db,()=>{if(!db.prepare('UPDATE prototypes SET title=?,description=? WHERE id=?').run(title,description,req.params.id).changes)throw fail(404,'Protótipo não encontrado.');setClients('prototype_clients','prototype_id',req.params.id,ids);});res.json({ok:true});
   });
   app.delete('/api/admin/prototypes/:id',(req,res)=>{if(!db.prepare('DELETE FROM prototypes WHERE id=?').run(req.params.id).changes)throw fail(404,'Protótipo não encontrado.');res.json({ok:true});});
   app.get('/',(req,res)=>res.sendFile(resolve(root,'public/index.html')));
@@ -121,7 +131,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
     let status=err.status||500,message=err.message;
     if(err.code==='LIMIT_FILE_SIZE'){status=413;message='O arquivo deve ter até 10 MB.';}
     else if(err instanceof multer.MulterError){status=400;message='Upload inválido. Selecione somente um HTML.';}
-    else if(err.code?.startsWith('ERR_SQLITE')&&err.message.includes('UNIQUE')){status=409;message='Este e-mail já está cadastrado.';}
+    else if(err.code?.startsWith('ERR_SQLITE')&&err.message.includes('UNIQUE')){status=409;message=err.message.includes('clients.name_key')?'Este cliente já está cadastrado.':'Este e-mail já está cadastrado.';}
     if(status===500){console.error('Erro interno:',err.code||err.name);message='Não foi possível concluir. Tente novamente.';}
     res.status(status).json({error:message});
   });
