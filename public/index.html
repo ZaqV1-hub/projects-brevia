@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipos Brevia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<section id="login">
+  <div class="login-brand">
+    <div class="logo">Brev<span class="ia">i<b>a</b></span>.</div>
+    <div style="position:relative;z-index:1">
+      <p class="eyebrow">Área de protótipos</p>
+      <h1>Veja seu projeto ganhando forma.</h1>
+      <p>Navegue pelos protótipos que a Brevia está construindo para você, clique em tudo e teste os fluxos antes de irem para produção.</p>
+    </div>
+    <div class="login-points">
+      <div><b>Navegável</b>Funciona como o produto final</div>
+      <div><b>Privado</b>Só você vê o que é seu</div>
+      <div><b>Sempre atual</b>Versões novas aparecem aqui</div>
+    </div>
+    <div class="deco"><span></span><span></span><span></span><span></span></div>
+  </div>
+  <div class="login-form">
+    <form class="login-card" id="loginForm" autocomplete="on">
+      <p class="eyebrow v">Entrar</p>
+      <h2 class="h1">Acesse seus protótipos</h2>
+      <p class="lead">Use o login que a Brevia enviou para você.</p>
+      <div class="field"><label for="email">E-mail</label><input class="input" id="email" autocomplete="username" type="email" placeholder="voce@empresa.com.br" required></div>
+      <div class="field"><label for="pass">Senha</label><input class="input" id="pass" autocomplete="current-password" type="password" placeholder="••••••••" required></div>
+      <div class="login-err" id="loginErr"></div>
+      <button class="btn btn-primary" style="width:100%" type="submit">Entrar</button>
+    </form>
+  </div>
+</section>
+
+<!-- ================= APP ================= -->
+<section id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-in">
+      <div class="logo">Brev<span class="ia">i<b>a</b></span>.</div>
+      <span class="tag">Protótipos</span>
+      <nav class="nav" id="nav">
+        <button data-page="home" class="on">Meus protótipos</button>
+        <button data-page="admin" id="navAdmin">Administração</button>
+      </nav>
+      <div class="me">
+        <div class="me-name" id="meName"></div>
+        <div class="avatar" id="meAvatar"></div>
+        <button class="btn btn-dark-ghost btn-sm" id="logout">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Home: protótipos da pessoa -->
+  <main class="wrap" id="page-home">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow" id="hello"></p>
+        <h1 class="h1">Seus protótipos</h1>
+        <p class="lead" id="homeLead"></p>
+      </div>
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="input" id="q" placeholder="Buscar protótipo">
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <!-- Admin -->
+  <main class="wrap hidden" id="page-admin">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow v">Administração</p>
+        <h1 class="h1">Painel de protótipos</h1>
+        <p class="lead">Publique HTMLs, crie logins e defina quem vê o quê.</p>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="tabs"><button class="on" data-tab="protos">Protótipos</button><button data-tab="people">Pessoas</button></div>
+
+    <div class="panel" id="tab-protos">
+      <div class="panel-head"><h2>Protótipos publicados</h2><button class="btn btn-primary btn-sm" id="btnNewProto">+ Publicar protótipo</button></div>
+      <table class="tbl"><thead><tr><th>Protótipo</th><th class="hide-m">Cliente</th><th class="hide-m">Versão</th><th>Acesso</th><th></th></tr></thead><tbody id="protoRows"></tbody></table>
+    </div>
+
+    <div class="panel hidden" id="tab-people">
+      <div class="panel-head"><h2>Pessoas com acesso</h2><button class="btn btn-primary btn-sm" id="btnNewUser">+ Criar login</button></div>
+      <table class="tbl"><thead><tr><th>Pessoa</th><th class="hide-m">Empresa</th><th>Protótipos</th><th></th></tr></thead><tbody id="userRows"></tbody></table>
+    </div>
+  </main>
+</section>
+
+<!-- ================= VIEWER ================= -->
+<section id="viewer" class="hidden">
+  <div class="vbar">
+    <button class="icon-btn" id="vBack" title="Voltar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="title"><b id="vTitle"></b><small id="vSub"></small></div>
+    <div class="seg" id="vSeg">
+      <button data-d="desktop" class="on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/></svg><span>Desktop</span></button>
+      <button data-d="tablet"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/></svg><span>Tablet</span></button>
+      <button data-d="mobile"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/></svg><span>Celular</span></button>
+    </div>
+    <button class="icon-btn" id="vReload" title="Recarregar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button class="icon-btn" id="vFull" title="Tela cheia"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </div>
+  <div class="stage"><div class="frame" id="vFrame"><iframe id="vIframe" sandbox="allow-scripts allow-forms" title="Protótipo"></iframe></div></div>
+  <div class="vfoot"><span>Visualização protegida · Brevia</span><span id="vVer"></span></div>
+</section>
+
+<div id="modalRoot"></div>
+
+<div id="notice" role="status" aria-live="polite"></div><script src="/app.js" defer></script></body></html>

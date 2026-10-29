@@ -1,0 +1,13 @@
+services:
+  portal:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN:?Defina o domínio HTTPS em APP_ORIGIN}
+    volumes:
+      - portal-data:/app/data
+volumes:
+  portal-data:
