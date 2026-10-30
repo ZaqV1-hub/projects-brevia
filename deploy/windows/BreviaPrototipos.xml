@@ -1,0 +1,19 @@
+<service>
+  <id>BreviaPrototipos</id>
+  <name>Brevia - Portal de Prototipos</name>
+  <description>Portal privado de protótipos Brevia, publicado pelo IIS.</description>
+  <executable>C:\BreviaPrototipos\runtime\node-v22.23.4-win-x64\node.exe</executable>
+  <arguments>"C:\BreviaPrototipos\app\server.js"</arguments>
+  <workingdirectory>C:\BreviaPrototipos\app</workingdirectory>
+  <env name="NODE_ENV" value="production" />
+  <env name="HOST" value="127.0.0.1" />
+  <env name="PORT" value="4607" />
+  <env name="APP_ORIGIN" value="https://prototipos.brevia.company" />
+  <env name="DATA_DIR" value="C:\BreviaPrototipos\data" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>20 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+  <logpath>C:\BreviaPrototipos\logs</logpath>
+  <log mode="roll-by-size"><sizeThreshold>10240</sizeThreshold><keepFiles>8</keepFiles></log>
+</service>
