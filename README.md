@@ -58,7 +58,7 @@ Testes de integração cobrem autenticação, cookies, hash, autorização por c
 
 ## Instalar na máquina virtual depois da aprovação
 
-O projeto está preparado para um servidor Node atrás de um proxy HTTPS. Ainda não houve publicação em produção.
+O portal está publicado no IIS em https://prototipos.brevia.company. A instalação Windows, o serviço, os caminhos privados e as tarefas de manutenção estão documentados em `deploy/windows/README.md`. A configuração abaixo também permite executar em outros servidores Node atrás de um proxy HTTPS.
 
 Configure `NODE_ENV=production`, `APP_ORIGIN=https://seu-dominio` e `HOST=127.0.0.1`. O proxy deve encaminhar para a porta 3000 e informar `X-Forwarded-Proto: https`. O portal confia em um único salto de proxy; a porta Node não deve ficar exposta diretamente. Use exatamente o domínio configurado: login por outra origem é recusado. Em produção o cookie exige HTTPS.
 
