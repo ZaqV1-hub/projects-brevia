@@ -9,16 +9,17 @@ const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').re
 const admin={id:'admin',name:'Administrador',company:'Brevia',role:'admin',mustChange:false};
 const client={id:'client',name:'Cliente de teste',company:'Estância',role:'client',mustChange:false};
 const proto={id:'p',title:'Meu protótipo',client:'Estância',description:'Teste',version:1,updated:'2026-10-29',clients:[{id:'c',name:'Estância'}]};
-function fixture({delayAdminView=false}={}){
+function fixture({delayAdminView=false,delayInitialSession=false}={}){
   const dom=new JSDOM(shell,{url:'http://localhost:3000',runScripts:'outside-only'}),w=dom.window;
   w.scrollTo=()=>{};w.passwordRules=passwordRules;w.passwordError=passwordError;w.TextEncoder=TextEncoder;
-  const requests=[];let releaseAdminView;
+  const requests=[];let releaseAdminView,releaseInitialSession;
   const pending=delayAdminView?new Promise(resolve=>{releaseAdminView=resolve;}):null;
+  const pendingSession=delayInitialSession?new Promise(resolve=>{releaseInitialSession=resolve;}):null;
   w.fetch=async path=>{
     requests.push(path);
     if(path==='/api/admin/view'&&pending)await pending;
     const html=path==='/api/admin/view';let data,status=200;
-    if(path==='/api/me'){status=401;data={error:'Entre para continuar.'};}
+    if(path==='/api/me'){if(pendingSession){data=await pendingSession;}else{status=401;data={error:'Entre para continuar.'};}}
     else if(path==='/api/prototypes')data=[proto];
     else if(path==='/api/admin/view')data=adminView;
     else if(path==='/api/admin/users')data=[{...client,clients:proto.clients,active:true}];
@@ -28,7 +29,7 @@ function fixture({delayAdminView=false}={}){
     return {ok:status===200,status,headers:{get:()=>html?'text/html':'application/json'},json:async()=>data,text:async()=>data};
   };
   w.eval(source+"\nwindow.testPortal={enter,showLogin,go,clientModal,userModal,protoModal,versionModal,deleteModal};");
-  return {dom,w,requests,releaseAdminView};
+  return {dom,w,requests,releaseAdminView,releaseInitialSession};
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
 function assertClientOnly(w){assert.equal(w.document.querySelector('#page-admin'),null);assert.equal(w.document.querySelector('#btnNewProto'),null);assert.equal(w.document.querySelector('#stats'),null);assert.equal(w.document.querySelector('#page-home').classList.contains('hidden'),false);assert.equal(w.document.querySelector('#navAdmin').classList.contains('hidden'),true);assert.equal(w.document.querySelector('[data-page=home]').classList.contains('on'),true);}
@@ -56,5 +57,12 @@ test('cliente não carrega a página administrativa e ações diretas não abrem
     w.testPortal.go('admin');for(const name of ['clientModal','userModal','protoModal','versionModal','deleteModal'])w.testPortal[name]();
     assertClientOnly(w);assert.equal(w.document.querySelector('#modalRoot').children.length,0);
     assert.doesNotMatch(shell,/Publicar protótipo|Painel de protótipos|id="page-admin"/);
+  }finally{dom.window.close();}
+});
+test('verificação inicial atrasada não substitui a sessão do cliente por um admin anterior',async()=>{
+  const {dom,w,requests,releaseInitialSession}=fixture({delayInitialSession:true});try{
+    await w.testPortal.enter({user:client,csrf:'client'});
+    releaseInitialSession({user:admin,csrf:'old-admin'});await settle();await settle();
+    assertClientOnly(w);assert.equal(requests.some(p=>p.startsWith('/api/admin')),false);
   }finally{dom.window.close();}
 });

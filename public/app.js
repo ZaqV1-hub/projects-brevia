@@ -164,4 +164,5 @@ function changePassword(required) {
   wirePassword('newPassword','confirmPassword',{currentId:'currentPassword'});
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#modalRoot').children.length)closeModal();else if(!$('#viewer').classList.contains('hidden'))closeViewer();}if(e.key==='Tab'&&$('#modalRoot').children.length){const nodes=[...$('#modalRoot').querySelectorAll('input,textarea,button')].filter(n=>!n.disabled),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
-api('/api/me').then(enter).catch(e=>{if(me)notify(e.message);});
+const initialRevision=sessionRevision;
+api('/api/me').then(data=>{if(sessionRevision===initialRevision)return enter(data);}).catch(e=>{if(me)notify(e.message);});
