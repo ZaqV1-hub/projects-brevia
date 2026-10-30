@@ -82,6 +82,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
     res.set({'Content-Security-Policy':`sandbox allow-scripts allow-forms; default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https:; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; media-src https: data: blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,'X-Frame-Options':'SAMEORIGIN','Cross-Origin-Resource-Policy':'same-origin'}).type('html').send(Buffer.from(p.html));
   });
   app.use('/api/admin',auth,ready,admin);
+  app.get('/api/admin/view',(req,res)=>res.sendFile(resolve(root,'views/admin.html')));
   app.get('/api/admin/clients',(req,res)=>res.json(db.prepare('SELECT id,name FROM clients ORDER BY name').all().map(c=>({...c,people:db.prepare('SELECT COUNT(*) AS n FROM user_clients WHERE client_id=?').get(c.id).n,prototypes:db.prepare('SELECT COUNT(*) AS n FROM prototype_clients WHERE client_id=?').get(c.id).n}))));
   app.post('/api/admin/clients',(req,res)=>{const name=text(req.body.name),id=randomUUID();if(db.prepare('SELECT id FROM clients WHERE name_key=?').get(clientKey(name)))throw fail(409,'Este cliente já está cadastrado, mesmo com diferenças de acento ou maiúsculas.');db.prepare('INSERT INTO clients VALUES(?,?,?)').run(id,name,clientKey(name));res.status(201).json({id});});
   app.patch('/api/admin/clients/:id',(req,res)=>{const name=text(req.body.name),existing=db.prepare('SELECT id FROM clients WHERE name_key=? AND id!=?').get(clientKey(name),req.params.id);if(existing)throw fail(409,'Este cliente já está cadastrado, mesmo com diferenças de acento ou maiúsculas.');if(!db.prepare('UPDATE clients SET name=?,name_key=? WHERE id=?').run(name,clientKey(name),req.params.id).changes)throw fail(404,'Cliente não encontrado.');res.json({ok:true});});
@@ -121,6 +122,7 @@ export function createApp({dataDir=process.env.DATA_DIR||resolve(root,'data'),pr
   });
   app.delete('/api/admin/prototypes/:id',(req,res)=>{if(!db.prepare('DELETE FROM prototypes WHERE id=?').run(req.params.id).changes)throw fail(404,'Protótipo não encontrado.');res.json({ok:true});});
   app.get('/',(req,res)=>res.sendFile(resolve(root,'public/index.html')));
+  app.get(['/admin','/administracao'],auth,ready,admin,(req,res)=>res.sendFile(resolve(root,'public/index.html')));
   app.get('/app.js',(req,res)=>res.sendFile(resolve(root,'public/app.js')));
   app.get('/styles.css',(req,res)=>res.sendFile(resolve(root,'public/styles.css')));
   app.get('/password-policy.js',(req,res)=>res.sendFile(resolve(root,'public/password-policy.js')));

@@ -1,0 +1,26 @@
+<main class="wrap hidden" id="page-admin">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow v">Administração</p>
+        <h1 class="h1">Painel de protótipos</h1>
+        <p class="lead">Publique HTMLs, crie logins e defina quem vê o quê.</p>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="tabs"><button class="on" data-tab="protos">Protótipos</button><button data-tab="clients">Clientes</button><button data-tab="people">Pessoas</button></div>
+
+    <div class="panel" id="tab-protos">
+      <div class="panel-head"><h2>Protótipos publicados</h2><button class="btn btn-primary btn-sm" id="btnNewProto">+ Publicar protótipo</button></div>
+      <table class="tbl"><thead><tr><th>Protótipo</th><th class="hide-m">Clientes</th><th class="hide-m">Versão</th><th>Acesso</th><th></th></tr></thead><tbody id="protoRows"></tbody></table>
+    </div>
+
+    <div class="panel hidden" id="tab-clients">
+      <div class="panel-head"><h2>Clientes cadastrados</h2><button class="btn btn-primary btn-sm" id="btnNewClient">+ Adicionar cliente</button></div>
+      <table class="tbl"><thead><tr><th>Empresa</th><th>Pessoas</th><th>Protótipos</th><th></th></tr></thead><tbody id="clientRows"></tbody></table>
+    </div>
+
+    <div class="panel hidden" id="tab-people">
+      <div class="panel-head"><h2>Pessoas com acesso</h2><button class="btn btn-primary btn-sm" id="btnNewUser">+ Criar login</button></div>
+      <table class="tbl"><thead><tr><th>Pessoa</th><th class="hide-m">Clientes</th><th>Protótipos</th><th></th></tr></thead><tbody id="userRows"></tbody></table>
+    </div>
+  </main>
